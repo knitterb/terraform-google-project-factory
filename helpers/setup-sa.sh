@@ -18,9 +18,13 @@ set -e
 set -u
 
 # check for input variables
-if [ $# -ne 3 ]; then
+if [ $# -lt 2 ]; then
   echo
-  echo "Usage: $0 <organization name> <project id> <billing account id?>"
+  echo "Usage: $0 <organization name> <project id> [<billing account id>]"
+  echo
+  echo "  organization name (required)"
+  echo "  project id (required)"
+  echo "  billing account id (optional)"
   echo
   exit 1
 fi
@@ -46,14 +50,24 @@ then
 fi
 
 # Billing account
-echo "Verifying billing account..."
-BILLING_ACCOUNT="$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" --filter="$3")"
+if [ $# -eq 3 ]; then
+  echo "Verifying billing account..."
+  BILLING_ACCOUNT="$(gcloud beta billing accounts list --format="value(ACCOUNT_ID)" --filter="$3")"
 
-if [[ $BILLING_ACCOUNT == "" ]];
-then
-  echo "The billing account does not exist. Exiting."
-  exit 1;
+  if [[ $BILLING_ACCOUNT == "" ]];
+  then
+    echo "The billing account does not exist. Exiting."
+    exit 1;
+  fi
+  if ! hash jq 2>/dev/null; then
+    echo "Missing dependency: jq"
+    echo "Please install jq and try again or optionally remove the billing account parameter."
+    exit 1
+  fi
+else
+  echo "Skipping billing account verification... (parameter not passed)"
 fi
+exit 0
 
 # Service Account creation
 SA_NAME="project-factory-${RANDOM}"
@@ -150,25 +164,21 @@ gcloud services enable \
   --project ${HOST_PROJECT}
 
 # enable the billing account
-echo "Enabling the billing account..."
-gcloud beta billing accounts get-iam-policy $BILLING_ACCOUNT > policy-tmp-$$.yml
-unamestr=`uname`
-if [ "$unamestr" = 'Darwin' ]; then
-  sed -i '' -e "/^etag:.*/i \\
-- members:\\
-\ \ - serviceAccount:${SA_ID}\\
-\ \ role: roles/billing.user" policy-tmp-$$.yml
-elif [ "$unamestr" = 'Linux' ]; then
-  sed -i '' -e "/^etag:.*/i \\
-- members:\\
-\ \ - serviceAccount:${SA_ID}\\
-\ \ role: roles/billing.user" policy-tmp-$$.yml
-else
-  echo "Could not set roles/billing.user on service account $SERVICE_ACCOUNT.\
-  Please perform this manually."
+if [[ ${BILLING_ACCOUNT:-} != "" ]]; then
+  echo "Enabling the billing account..."
+  gcloud beta billing accounts get-iam-policy $BILLING_ACCOUNT --format=json > policy-tmp-$$.json
+  unamestr=`uname`
+  if [ "$unamestr" = 'Darwin' ]; then
+    jq ".bindings[] | select(.role == \"roles/billing.user\").members |= . + [\"${SERVICE_ACCOUNT}\"] " policy-tmp-$$.json > policy-tmp-$$-2.json
+  elif [ "$unamestr" = 'Linux' ]; then
+    jq ".bindings[] | select(.role == \"roles/billing.user\").members |= . + [\"${SERVICE_ACCOUNT}\"] " policy-tmp-$$.json > policy-tmp-$$-2.json
+  else
+    echo "Could not set roles/billing.user on service account $SERVICE_ACCOUNT.\
+    Please perform this manually."
+  fi
+  gcloud beta billing accounts set-iam-policy $BILLING_ACCOUNT policy-tmp-$$-2.json --format=json
+  rm -f policy-tmp-$$.json
+  rm -f policy-tmp-$$-2.json
 fi
-gcloud beta billing accounts set-iam-policy $BILLING_ACCOUNT policy-tmp-$$.yml
-rm -f policy-tmp-$$.yml
-
 
 echo "All done."
