@@ -48,7 +48,12 @@ variable "folder_id" {
 }
 
 variable "group_name" {
-  description = "A group to control the project by being assigned group_role (defaults to project editor)"
+  description = "A group to control the project by being assigned group_role"
+  default     = ""
+}
+
+variable "group_email" {
+  description = "The email used for the group, this is automatically created"
   default     = ""
 }
 
