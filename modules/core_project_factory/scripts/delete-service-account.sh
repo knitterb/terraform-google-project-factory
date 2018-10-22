@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2018 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +19,8 @@ set -e
 PROJECT_ID=$1
 CREDENTIALS=$2
 SA_ID=$3
+
+echo "Deleting service account ${SA_ID}..."
 
 export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=$CREDENTIALS
 
