@@ -20,6 +20,8 @@ PROJECT_ID=$1
 CREDENTIALS=$2
 SA_ID=$3
 
+echo "Deleting service account ${SA_ID}..."
+
 export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=$CREDENTIALS
 
 SA_LIST=$(gcloud --project="$PROJECT_ID" iam service-accounts list || exit 1)
